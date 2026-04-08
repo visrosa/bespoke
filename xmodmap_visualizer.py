@@ -1,10 +1,27 @@
 #!/usr/bin/env python3
+"""
+Xmodmap Visualizer
+------------------
+A utility to visualize the current X11 keyboard mapping in a terminal-friendly 
+ASCII grid. It parses system keysym definitions and matches them against the 
+active xmodmap configuration to display alphanumeric and numeric keypad layouts.
+"""
+
 import subprocess
 import re
 import os
 import unicodedata
 
 def build_keysym_database():
+    """
+    Parses X11 header files to map symbolic names (e.g., 'XK_space') to 
+    actual Unicode characters.
+    
+    Returns:
+        dict: A mapping of keysym names to printable characters or 
+              combining marks.
+    """
+
     keysym_to_char = {}
     paths = ["/usr/include/X11/keysymdef.h", "/usr/include/X11/XF86keysym.h"]
     
@@ -47,6 +64,10 @@ def build_keysym_database():
 KEYSYM_DB = build_keysym_database()
 
 def sanitize_char(c):
+    """
+    Ensures characters are printable. Adds a placeholder circle '◌' 
+    to combining marks (dead keys) so they don't vanish in the terminal.
+    """
     if not c or not isinstance(c, str) or len(c) != 1:
         return c if c else " "
     if unicodedata.combining(c):
@@ -54,6 +75,10 @@ def sanitize_char(c):
     return c
 
 def get_char(sym):
+    """
+    Translates a keysym string (from xmodmap) into a printable character.
+    Handles 'UXXXX' format and looks up symbolic names in KEYSYM_DB.
+    """
     if not sym or sym == "NoSymbol": return " "
     if sym.startswith("U") and len(sym) >= 5:
         try:
@@ -61,6 +86,10 @@ def get_char(sym):
         except: pass
     char = KEYSYM_DB.get(sym, sym if len(sym) == 1 else " ")
     return sanitize_char(char)
+
+# ---------------------------------------------------------
+# Layout Definitions (Keycodes vary by driver/hardware)
+# ---------------------------------------------------------
 
 # Alphanumeric block
 LAYOUT_ROWS = [
@@ -70,16 +99,22 @@ LAYOUT_ROWS = [
     [94, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61]          
 ]
 
-# Numpad block (Standard PC layout)
+# Numpad block (Standard PC 104/105 layout)
 NUMPAD_ROWS = [
     [106, 63, 82], # [NL] / * -
     [79, 80, 81, 86],   # 7 8 9 +
     [83, 84, 85, 129],  # 4 5 6 .
-    [87, 88, 89],  # 1 2 3 [Enter]
+    [87, 88, 89],       # 1 2 3 ⎆
     [90, 91]            # 0 .
 ]
 
 def render_section(row_list, key_data):
+    """
+    Prints a grid of 5-line high ASCII keycaps.
+    Each key displays:
+    - Top Left: Shift       Top Right: AltGr+Shift
+    - Bottom Left: Normal   Bottom Right: AltGr
+    """
     for row in row_list:
         lines = ["", "", "", "", ""]
         for kc in row:
@@ -93,6 +128,9 @@ def render_section(row_list, key_data):
         print()
 
 def render():
+    """
+    Main execution: calls xmodmap, parses the output, and triggers rendering.
+    """
     key_data = {}
     try:
         raw = subprocess.check_output(["xmodmap", "-pke"], text=True)
